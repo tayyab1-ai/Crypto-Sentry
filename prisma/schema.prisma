@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+ url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String      @id @default(cuid())
+  name           String
+  email          String      @unique
+  password_hash  String?
+  tutorial_guide Boolean     @default(false)
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  // Relations
+  watchlists     Watchlist[]
+
+  @@index([email])
+}
+
+model Watchlist {
+  id         String   @id @default(cuid())
+  user_id    String
+  asset_id   String   
+  asset_name String   
+  added_at   DateTime @default(now())
+
+  // Relations
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, asset_id])
+  @@index([user_id])
+}
+
+model CryptoAlert {
+  id             String   @id @default(cuid())
+  asset_id       String
+  asset_name     String
+  previous_price Float
+  current_price  Float
+  change_percent Float
+  alert_type     String   @default("CRASH")
+  detected_at    DateTime @default(now())
+
+  @@index([asset_id, detected_at])
+  @@index([detected_at])
+}

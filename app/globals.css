@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0a0c0a;
+  --bg-secondary: #0f120f;
+  --bg-card: #111611;
+  --bg-card-hover: #151c15;
+  --border-default: #1e2b1e;
+  --border-green: #22c55e;
+  --border-green-dim: #166534;
+  --green-bright: #22c55e;
+  --green-dim: #16a34a;
+  --green-glow: rgba(34, 197, 94, 0.15);
+  --green-glow-strong: rgba(34, 197, 94, 0.3);
+  --text-primary: #e2e8e2;
+  --text-secondary: #6b7a6b;
+  --text-muted: #3a4a3a;
+  --red-alert: #ef4444;
+  --red-bg: rgba(239, 68, 68, 0.08);
+  --red-border: #7f1d1d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-green-dim);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--green-dim);
+}
+
+/* Green glow pulse animation */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--green-glow); }
+  50% { box-shadow: 0 0 20px var(--green-glow-strong); }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes price-up {
+  0% { background: rgba(34, 197, 94, 0.2); }
+  100% { background: transparent; }
+}
+
+@keyframes price-down {
+  0% { background: rgba(239, 68, 68, 0.2); }
+  100% { background: transparent; }
+}
+
+.price-flash-up {
+  animation: price-up 0.6s ease-out;
+}
+
+.price-flash-down {
+  animation: price-down 0.6s ease-out;
+}
+
+/* Mini sparkline chart */
+.sparkline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Status indicator dot */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background: var(--green-bright);
+  box-shadow: 0 0 6px var(--green-bright);
+  animation: blink 2s infinite;
+}
+
+/* Terminal-style border glow on active sidebar item */
+.sidebar-active {
+  border-left: 2px solid var(--green-bright);
+  box-shadow: inset 0 0 20px var(--green-glow);
+}
+
+/* Grid background for cards */
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(34, 197, 94, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 197, 94, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
