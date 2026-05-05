@@ -1,3 +1,9 @@
+// PATH: ask-ai/components/CoinTable.tsx
+//
+// FIX: Sparkline graph history ab server se aati hai (global.__priceHistory).
+// Browser mein kuch store nahi hota — page refresh ya navigation se graph
+// kabhi reset nahi hoga. History sirf server restart pe reset hogi.
+
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -30,12 +36,17 @@ const COIN_COLORS: Record<string, string> = {
   chainlink: '#375BD2', litecoin: '#BFBBBB', stellar: '#7D00FF',
 }
 
-// Mini sparkline SVG chart
+// ─── Sparkline SVG chart ──────────────────────────────────────────────────────
+// values: number[] — server se aayi persistent history
 function Sparkline({ values, positive }: { values: number[]; positive: boolean }) {
-  if (values.length < 2) {
+  if (!values || values.length < 2) {
+    // Sirf ek dashed line — koi fake data nahi
     return (
       <svg width="64" height="28" viewBox="0 0 64 28" fill="none">
-        <line x1="0" y1="14" x2="64" y2="14" stroke="#1e2b1e" strokeWidth="1.5" strokeDasharray="3 3"/>
+        <line
+          x1="4" y1="14" x2="60" y2="14"
+          stroke="#1e2b1e" strokeWidth="1.5" strokeDasharray="3 3"
+        />
       </svg>
     )
   }
@@ -48,39 +59,34 @@ function Sparkline({ values, positive }: { values: number[]; positive: boolean }
   const pad = 3
 
   const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * (w - pad * 2) + pad
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2)
     const y = h - pad - ((v - min) / range) * (h - pad * 2)
-    return `${x},${y}`
+    return [x, y] as [number, number]
   })
 
-  const pathD = `M ${points.join(' L ')}`
-  const areaD = `M ${pad},${h - pad} L ${points.join(' L ')} L ${w - pad},${h - pad} Z`
+  const linePath = `M ${points.map(([x, y]) => `${x},${y}`).join(' L ')}`
+  const areaPath = `M ${pad},${h - pad} L ${points.map(([x, y]) => `${x},${y}`).join(' L ')} L ${w - pad},${h - pad} Z`
+
   const color = positive ? '#22c55e' : '#ef4444'
-  const areaColor = positive ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'
+  const areaFill = positive ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'
+
+  const lastX = points[points.length - 1][0]
+  const lastY = points[points.length - 1][1]
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none">
-      <path d={areaD} fill={areaColor}/>
-      <path d={pathD} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx={points[points.length - 1].split(',')[0]} cy={points[points.length - 1].split(',')[1]} r="2" fill={color}/>
+      <path d={areaPath} fill={areaFill} />
+      <path d={linePath} stroke={color} strokeWidth="1.5"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="2" fill={color} />
     </svg>
   )
 }
 
-// Price history hook — stores last N price samples for sparkline
-function usePriceHistory(coinId: string, currentPrice: number, maxPoints = 12) {
-  const historyRef = useRef<number[]>([])
-  useEffect(() => {
-    if (currentPrice > 0) {
-      historyRef.current = [...historyRef.current, currentPrice].slice(-maxPoints)
-    }
-  }, [currentPrice, maxPoints])
-  return historyRef.current
-}
-
-// Single Coin Card
-function CoinCard({ 
-  coinId, data, index, isWatched, onToggleWatchlist, onClick 
+// ─── Single Coin Card ─────────────────────────────────────────────────────────
+function CoinCard({
+  coinId, data, index, isWatched, onToggleWatchlist, onClick,
+  priceHistory,
 }: {
   coinId: string
   data: CoinData
@@ -88,14 +94,13 @@ function CoinCard({
   isWatched: boolean
   onToggleWatchlist: (id: string, name: string) => void
   onClick: () => void
+  priceHistory: number[]   // ← server se aaya persistent history
 }) {
   const isAlert = data.status === 'alert'
   const change24h = data.usd_24h_change || 0
   const isPositive = change24h >= 0
-  const symbol = COIN_SYMBOLS[coinId] || coinId.toUpperCase()
+  const symbol = COIN_SYMBOLS[coinId] || coinId.toUpperCase().slice(0, 4)
   const coinColor = COIN_COLORS[coinId] || '#22c55e'
-
-  const priceHistory = usePriceHistory(coinId, data.usd)
 
   return (
     <motion.div
@@ -109,49 +114,61 @@ function CoinCard({
         border: `1px solid ${isAlert ? 'rgba(239,68,68,0.3)' : 'var(--border-default)'}`,
       }}
       onMouseEnter={(e) => {
-        const el = e.currentTarget
-        el.style.borderColor = isAlert ? 'rgba(239,68,68,0.5)' : 'var(--border-green-dim)'
-        el.style.background = isAlert ? 'rgba(239,68,68,0.08)' : 'var(--bg-card-hover)'
+        e.currentTarget.style.borderColor = isAlert
+          ? 'rgba(239,68,68,0.5)' : 'var(--border-green-dim)'
+        e.currentTarget.style.background = isAlert
+          ? 'rgba(239,68,68,0.08)' : 'var(--bg-card-hover)'
       }}
       onMouseLeave={(e) => {
-        const el = e.currentTarget
-        el.style.borderColor = isAlert ? 'rgba(239,68,68,0.3)' : 'var(--border-default)'
-        el.style.background = isAlert ? 'rgba(239,68,68,0.05)' : 'var(--bg-card)'
+        e.currentTarget.style.borderColor = isAlert
+          ? 'rgba(239,68,68,0.3)' : 'var(--border-default)'
+        e.currentTarget.style.background = isAlert
+          ? 'rgba(239,68,68,0.05)' : 'var(--bg-card)'
       }}
     >
-      {/* Top Row */}
+      {/* Top Row — Name + Star */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          {/* Coin color dot */}
-          <div 
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black"
-            style={{ background: `${coinColor}20`, color: coinColor, border: `1px solid ${coinColor}40` }}
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center
+                        text-[9px] font-black"
+            style={{
+              background: `${coinColor}20`,
+              color: coinColor,
+              border: `1px solid ${coinColor}40`,
+            }}
           >
             {symbol.slice(0, 1)}
           </div>
           <div>
-            <div className="text-xs font-bold tracking-wide" style={{ color: 'var(--text-primary)' }}>
+            <div className="text-xs font-bold tracking-wide"
+              style={{ color: 'var(--text-primary)' }}>
               {data.name || coinId}
             </div>
-            <div className="text-[9px] tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+            <div className="text-[9px] tracking-widest"
+              style={{ color: 'var(--text-secondary)' }}>
               {symbol}
             </div>
           </div>
         </div>
 
-        {/* Watchlist Star */}
+        {/* Watchlist star */}
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleWatchlist(coinId, data.name || coinId) }}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleWatchlist(coinId, data.name || coinId)
+          }}
           className="transition-all hover:scale-110 p-0.5"
           style={{ color: isWatched ? '#f59e0b' : 'var(--text-muted)' }}
         >
           {isWatched ? (
             <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 1L9.8 5.6L15 6.2L11.2 9.6L12.4 15L8 12.4L3.6 15L4.8 9.6L1 6.2L6.2 5.6L8 1Z"/>
+              <path d="M8 1L9.8 5.6L15 6.2L11.2 9.6L12.4 15L8 12.4L3.6 15L4.8 9.6L1 6.2L6.2 5.6L8 1Z" />
             </svg>
           ) : (
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <path d="M8 1L9.8 5.6L15 6.2L11.2 9.6L12.4 15L8 12.4L3.6 15L4.8 9.6L1 6.2L6.2 5.6L8 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M8 1L9.8 5.6L15 6.2L11.2 9.6L12.4 15L8 12.4L3.6 15L4.8 9.6L1 6.2L6.2 5.6L8 1Z"
+                stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
             </svg>
           )}
         </button>
@@ -159,43 +176,57 @@ function CoinCard({
 
       {/* Price */}
       <div className="mb-2">
-        <div className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-          ${data.usd?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <div
+          className="text-lg font-bold tracking-tight"
+          style={{
+            color: 'var(--text-primary)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          ${data.usd?.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </div>
       </div>
 
-      {/* Sparkline + 24h Change Row */}
+      {/* Sparkline + 24h change */}
       <div className="flex items-end justify-between">
+        {/* Graph — server se aayi persistent history use hoti hai */}
         <Sparkline values={priceHistory} positive={isPositive} />
-        
+
         <div className="text-right">
-          <div 
+          <div
             className="text-xs font-bold"
             style={{ color: isPositive ? 'var(--green-bright)' : 'var(--red-alert)' }}
           >
             {isPositive ? '▲' : '▼'} {Math.abs(change24h).toFixed(2)}%
           </div>
-          <div className="text-[8px] tracking-widest mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-[8px] tracking-widest mt-0.5"
+            style={{ color: 'var(--text-secondary)' }}>
             24H DELTA
           </div>
         </div>
       </div>
 
-      {/* Status Badge */}
+      {/* Status badge */}
       <div className="mt-3 pt-2.5" style={{ borderTop: '1px solid var(--border-default)' }}>
         <div className="flex items-center justify-between">
-          <span 
+          <span
             className="text-[8px] tracking-widest px-2 py-0.5 rounded"
-            style={{ 
+            style={{
               color: isAlert ? 'var(--red-alert)' : 'var(--green-bright)',
-              background: isAlert ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.08)',
-              border: `1px solid ${isAlert ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.2)'}`,
+              background: isAlert
+                ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.08)',
+              border: `1px solid ${isAlert
+                ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.2)'}`,
             }}
           >
             {isAlert ? '⚠ CRASH ALERT' : '● STABLE'}
           </span>
-          <span className="text-[8px] tracking-widest" style={{ color: 'var(--text-muted)' }}>
-            FULL ANALYSIS ↗
+          <span className="text-[8px] tracking-widest"
+            style={{ color: 'var(--text-muted)' }}>
+            {priceHistory.length} PTS ↗
           </span>
         </div>
       </div>
@@ -203,10 +234,13 @@ function CoinCard({
   )
 }
 
-export default function CoinTable({ 
-  searchQuery, filter, watchlist, onToggleWatchlist 
+// ─── Main CoinTable ───────────────────────────────────────────────────────────
+export default function CoinTable({
+  searchQuery, filter, watchlist, onToggleWatchlist,
 }: Props) {
   const [prices, setPrices] = useState<Record<string, CoinData>>({})
+  // ← history ab server se aata hai, browser mein store nahi hota
+  const [history, setHistory] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [stale, setStale] = useState(false)
   const [limit, setLimit] = useState(12)
@@ -217,10 +251,17 @@ export default function CoinTable({
     try {
       const res = await fetch('/api/prices')
       const data = await res.json()
+
       if (data.prices) {
         setPrices(data.prices)
         setStale(data.stale || false)
         setLastUpdate(new Date())
+      }
+
+      // ← Server se aayi persistent history set karo
+      // Har API call pe latest history milti hai — no local accumulation
+      if (data.history) {
+        setHistory(data.history)
       }
     } catch (err) {
       console.error('Prices not fetched:', err)
@@ -243,34 +284,40 @@ export default function CoinTable({
     return `${Math.floor(secs / 60)}min ago`
   }
 
-  const allCoins = Object.entries(prices)
-  let filteredCoins = allCoins.filter(([id, data]) => {
+  // ── Filter + Search ──────────────────────────────────────────────────────
+  let filteredCoins = Object.entries(prices).filter(([id, data]) => {
     const name = data.name?.toLowerCase() || id
     const symbol = (COIN_SYMBOLS[id] || '').toLowerCase()
-    const query = searchQuery.toLowerCase()
-    return name.includes(query) || symbol.includes(query) || id.includes(query)
+    const q = searchQuery.toLowerCase()
+    return name.includes(q) || symbol.includes(q) || id.includes(q)
   })
 
   if (filter === 'watchlist') {
     filteredCoins = filteredCoins.filter(([id]) => watchlist.includes(id))
   } else if (filter === 'gainers') {
-    filteredCoins = filteredCoins.filter(([, d]) => d.usd_24h_change > 0)
-    filteredCoins.sort((a, b) => b[1].usd_24h_change - a[1].usd_24h_change)
+    filteredCoins = filteredCoins
+      .filter(([, d]) => d.usd_24h_change > 0)
+      .sort((a, b) => b[1].usd_24h_change - a[1].usd_24h_change)
   } else if (filter === 'losers') {
-    filteredCoins = filteredCoins.filter(([, d]) => d.usd_24h_change < 0)
-    filteredCoins.sort((a, b) => a[1].usd_24h_change - b[1].usd_24h_change)
+    filteredCoins = filteredCoins
+      .filter(([, d]) => d.usd_24h_change < 0)
+      .sort((a, b) => a[1].usd_24h_change - b[1].usd_24h_change)
   }
 
   const visibleCoins = filteredCoins.slice(0, limit)
 
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {[...Array(8)].map((_, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             className="rounded-lg p-4 animate-pulse h-36"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
+            }}
           />
         ))}
       </div>
@@ -279,25 +326,26 @@ export default function CoinTable({
 
   return (
     <div>
-      {/* Stale Warning */}
+      {/* Stale warning */}
       {stale && (
-        <div 
+        <div
           className="rounded-lg px-4 py-2.5 mb-4 text-xs flex items-center gap-2"
-          style={{ 
+          style={{
             background: 'rgba(234,179,8,0.08)',
             border: '1px solid rgba(234,179,8,0.3)',
-            color: '#eab308'
+            color: '#eab308',
           }}
         >
           ⚠ Data may be stale — Check your connection or refresh the page.
         </div>
       )}
 
-      {/* Last Update */}
+      {/* Last update + history info */}
       {lastUpdate && (
         <div className="flex items-center gap-2 mb-4">
-          <span className="status-dot online"></span>
-          <span className="text-[10px] tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+          <span className="status-dot online" />
+          <span className="text-[10px] tracking-widest"
+            style={{ color: 'var(--text-secondary)' }}>
             UPDATED {timeAgo(lastUpdate).toUpperCase()} · AUTO-REFRESH 5s
           </span>
         </div>
@@ -315,34 +363,41 @@ export default function CoinTable({
               isWatched={watchlist.includes(id)}
               onToggleWatchlist={onToggleWatchlist}
               onClick={() => setSelectedCoin(selectedCoin === id ? null : id)}
+              // ← Server se aayi history pass karo — [] agar abhi tak koi data nahi
+              priceHistory={history[id] || []}
             />
           ))}
         </AnimatePresence>
       </div>
 
-      {/* Empty State */}
+      {/* Empty state */}
       {visibleCoins.length === 0 && (
         <div className="text-center py-16">
           <div className="text-2xl mb-2" style={{ color: 'var(--text-muted)' }}>◎</div>
-          <p className="text-xs tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-xs tracking-widest"
+            style={{ color: 'var(--text-secondary)' }}>
             NO ASSETS FOUND
           </p>
         </div>
       )}
 
-      {/* Show More */}
+      {/* Show more buttons */}
       {filteredCoins.length > limit && (
         <div className="flex items-center justify-center gap-2 mt-6">
-          <span className="text-[10px] tracking-widest" style={{ color: 'var(--text-secondary)' }}>SHOW:</span>
+          <span className="text-[10px] tracking-widest"
+            style={{ color: 'var(--text-secondary)' }}>
+            SHOW:
+          </span>
           {[12, 24, 50].map((n) => (
             <button
               key={n}
               onClick={() => setLimit(n)}
               className="px-3 py-1 rounded text-[10px] tracking-widest transition-all"
-              style={{ 
+              style={{
                 background: limit === n ? 'var(--green-glow)' : 'var(--bg-card)',
-                border: `1px solid ${limit === n ? 'var(--border-green)' : 'var(--border-default)'}`,
-                color: limit === n ? 'var(--green-bright)' : 'var(--text-secondary)'
+                border: `1px solid ${limit === n
+                  ? 'var(--border-green)' : 'var(--border-default)'}`,
+                color: limit === n ? 'var(--green-bright)' : 'var(--text-secondary)',
               }}
             >
               {n}
@@ -351,10 +406,13 @@ export default function CoinTable({
           <button
             onClick={() => setLimit(filteredCoins.length)}
             className="px-3 py-1 rounded text-[10px] tracking-widest transition-all"
-            style={{ 
-              background: limit >= filteredCoins.length ? 'var(--green-glow)' : 'var(--bg-card)',
-              border: `1px solid ${limit >= filteredCoins.length ? 'var(--border-green)' : 'var(--border-default)'}`,
-              color: limit >= filteredCoins.length ? 'var(--green-bright)' : 'var(--text-secondary)'
+            style={{
+              background: limit >= filteredCoins.length
+                ? 'var(--green-glow)' : 'var(--bg-card)',
+              border: `1px solid ${limit >= filteredCoins.length
+                ? 'var(--border-green)' : 'var(--border-default)'}`,
+              color: limit >= filteredCoins.length
+                ? 'var(--green-bright)' : 'var(--text-secondary)',
             }}
           >
             ALL ({filteredCoins.length})
@@ -362,7 +420,7 @@ export default function CoinTable({
         </div>
       )}
 
-      {/* Coin Detail Modal */}
+      {/* Coin detail modal */}
       <AnimatePresence>
         {selectedCoin && prices[selectedCoin] && (
           <CoinDetailModal
@@ -371,6 +429,7 @@ export default function CoinTable({
             isWatched={watchlist.includes(selectedCoin)}
             onClose={() => setSelectedCoin(null)}
             onToggleWatchlist={onToggleWatchlist}
+            priceHistory={history[selectedCoin] || []}
           />
         )}
       </AnimatePresence>
@@ -378,8 +437,10 @@ export default function CoinTable({
   )
 }
 
-// Coin Detail Modal
-function CoinDetailModal({ coinId, data, isWatched, onClose, onToggleWatchlist }: any) {
+// ─── Coin Detail Modal ────────────────────────────────────────────────────────
+function CoinDetailModal({
+  coinId, data, isWatched, onClose, onToggleWatchlist, priceHistory,
+}: any) {
   const change24h = data.usd_24h_change || 0
   const isAlert = data.status === 'alert'
   const isPositive = change24h >= 0
@@ -402,78 +463,142 @@ function CoinDetailModal({ coinId, data, isWatched, onClose, onToggleWatchlist }
         className="rounded-xl p-6 w-80 shadow-2xl"
         style={{
           background: 'var(--bg-card)',
-          border: `1px solid ${isAlert ? 'rgba(239,68,68,0.4)' : 'var(--border-green-dim)'}`,
+          border: `1px solid ${isAlert
+            ? 'rgba(239,68,68,0.4)' : 'var(--border-green-dim)'}`,
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex justify-between items-start mb-5">
           <div className="flex items-center gap-3">
-            <div 
-              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black"
-              style={{ background: `${coinColor}20`, color: coinColor, border: `1px solid ${coinColor}40` }}
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center
+                          text-sm font-black"
+              style={{
+                background: `${coinColor}20`,
+                color: coinColor,
+                border: `1px solid ${coinColor}40`,
+              }}
             >
               {symbol.slice(0, 1)}
             </div>
             <div>
-              <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{data.name}</div>
-              <div className="text-[9px] tracking-widest" style={{ color: 'var(--text-secondary)' }}>{symbol}</div>
+              <div className="font-bold text-sm"
+                style={{ color: 'var(--text-primary)' }}>
+                {data.name}
+              </div>
+              <div className="text-[9px] tracking-widest"
+                style={{ color: 'var(--text-secondary)' }}>
+                {symbol}
+              </div>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
-            className="text-xs transition-colors"
-            style={{ color: 'var(--text-secondary)' }}
-          >
+          <button onClick={onClose} className="text-xs transition-colors"
+            style={{ color: 'var(--text-secondary)' }}>
             ✕
           </button>
         </div>
 
-        {/* Price */}
-        <div 
-          className="rounded-lg p-4 mb-3"
-          style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+        {/* Sparkline in modal */}
+        <div
+          className="rounded-lg p-3 mb-3 flex items-center justify-between"
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-default)',
+          }}
         >
-          <div className="text-[9px] tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>CURRENT PRICE</div>
-          <div className="text-2xl font-bold" style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+          <div>
+            <div className="text-[9px] tracking-widest mb-1"
+              style={{ color: 'var(--text-secondary)' }}>
+              PRICE TREND
+            </div>
+            <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+              {priceHistory.length} data point{priceHistory.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+          <Sparkline values={priceHistory} positive={isPositive} />
+        </div>
+
+        {/* Price */}
+        <div
+          className="rounded-lg p-4 mb-3"
+          style={{
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-default)',
+          }}
+        >
+          <div className="text-[9px] tracking-widest mb-1"
+            style={{ color: 'var(--text-secondary)' }}>
+            CURRENT PRICE
+          </div>
+          <div
+            className="text-2xl font-bold"
+            style={{
+              color: 'var(--text-primary)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
             ${data.usd?.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats */}
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <div 
+          <div
             className="rounded-lg p-3"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+            style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-default)',
+            }}
           >
-            <div className="text-[9px] tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>30s STATUS</div>
-            <div className="text-xs font-bold" style={{ color: isAlert ? 'var(--red-alert)' : 'var(--green-bright)' }}>
+            <div className="text-[9px] tracking-widest mb-1"
+              style={{ color: 'var(--text-secondary)' }}>
+              30s STATUS
+            </div>
+            <div className="text-xs font-bold"
+              style={{
+                color: isAlert ? 'var(--red-alert)' : 'var(--green-bright)',
+              }}
+            >
               {isAlert ? '⚠ CRASH' : '● STABLE'}
             </div>
           </div>
-          <div 
+          <div
             className="rounded-lg p-3"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+            style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-default)',
+            }}
           >
-            <div className="text-[9px] tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>24H CHANGE</div>
-            <div className="text-xs font-bold" style={{ color: isPositive ? 'var(--green-bright)' : 'var(--red-alert)' }}>
-              {isPositive ? '▲ +' : '▼ '}{Math.abs(change24h).toFixed(2)}%
+            <div className="text-[9px] tracking-widest mb-1"
+              style={{ color: 'var(--text-secondary)' }}>
+              24H CHANGE
+            </div>
+            <div
+              className="text-xs font-bold"
+              style={{
+                color: isPositive ? 'var(--green-bright)' : 'var(--red-alert)',
+              }}
+            >
+              {isPositive ? '▲ +' : '▼ '}
+              {Math.abs(change24h).toFixed(2)}%
             </div>
           </div>
         </div>
 
-        {/* Watchlist Button */}
+        {/* Watchlist button */}
         <button
           onClick={() => onToggleWatchlist(coinId, data.name)}
-          className="w-full py-2.5 rounded-lg text-xs font-bold tracking-widest transition-all"
+          className="w-full py-2.5 rounded-lg text-xs font-bold
+                     tracking-widest transition-all"
           style={isWatched ? {
             background: 'rgba(245,158,11,0.1)',
             border: '1px solid rgba(245,158,11,0.3)',
-            color: '#f59e0b'
+            color: '#f59e0b',
           } : {
             background: 'var(--green-glow)',
             border: '1px solid var(--border-green)',
-            color: 'var(--green-bright)'
+            color: 'var(--green-bright)',
           }}
         >
           {isWatched ? '★ REMOVE FROM WATCHLIST' : '☆ ADD TO WATCHLIST'}

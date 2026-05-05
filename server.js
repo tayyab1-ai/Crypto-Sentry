@@ -204,14 +204,14 @@ function formatCoinName(assetId) {
 // MAIN POLLING CYCLE — Har 30 second
 // ─────────────────────────────────────────
 async function runSurveillanceCycle() {
-  console.log(`[${new Date().toISOString()}] 🔄 Surveillance cycle shuru...`)
+  console.log(`[${new Date().toISOString()}] 🔄 Surveillance cycle started...`)
 
   try {
     // Step 1: Prices fetch karo
     const prices = await fetchWithRetry()
     
     if (!prices) {
-      console.log(`[${new Date().toISOString()}] ⚠️ Prices nahi aaye, skip kar raha hai`)
+      console.log(`[${new Date().toISOString()}] ⚠️ Prices not found, skipping thr cycle`)
       return
     }
 
@@ -288,7 +288,7 @@ app.get('/cache', (req, res) => {
 const PORT = process.env.PORT || 4000
 
 app.listen(PORT, async () => {
-  console.log(`[${new Date().toISOString()}] 🚀 Surveillance Engine port ${PORT} pe start`)
+  console.log(`[${new Date().toISOString()}] 🚀 Surveillance Engine started at port ${PORT}`)
 
   // Turant pehla cycle chalao
   await runSurveillanceCycle()
@@ -301,13 +301,13 @@ app.listen(PORT, async () => {
 // GRACEFUL SHUTDOWN
 // ─────────────────────────────────────────
 process.on('SIGTERM', async () => {
-  console.log('Server band ho raha hai...')
+  console.log('Server Closing...')
   await prisma.$disconnect()
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
-  console.log('Server band ho raha hai...')
+  console.log('Server Closing...')
   await prisma.$disconnect()
   process.exit(0)
 })
