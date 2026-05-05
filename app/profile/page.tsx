@@ -35,18 +35,6 @@ export default async function ProfilePage() {
       ? { asset_id: { in: watchedIds } }
       : undefined
 
-  // ✅ FIXED: count me {} ki jagah undefined
-  const totalAlerts = await prisma.cryptoAlert.count(
-    whereFilter ? { where: whereFilter } : undefined
-  )
-
-  // Recent alerts
-  const recentAlerts = await prisma.cryptoAlert.findMany({
-    ...(whereFilter ? { where: whereFilter } : {}),
-    orderBy: { detected_at: 'desc' },
-    take: 5,
-  })
-
   return (
     <ProfileClient
       user={{
@@ -59,16 +47,6 @@ export default async function ProfilePage() {
           : null,
       }}
       watchlistCount={user.watchlists.length}
-      totalAlerts={totalAlerts}
-      recentAlerts={recentAlerts.map((a) => ({
-        id: a.id,
-        asset_id: a.asset_id,
-        asset_name: a.asset_name,
-        price_at_drop: a.price_at_drop,
-        drop_percentage: a.drop_percentage,
-        alert_type: a.alert_type,
-        detected_at: a.detected_at.toISOString(),
-      }))}
     />
   )
 }

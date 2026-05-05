@@ -216,10 +216,19 @@ export default function MarketClient({ userName, initialWatchlist }: any) {
                       {/* Asset */}
                       <div className="flex items-center gap-3">
                         <div 
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0"
-                          style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
+                          style={{ background: `${color}20`, border: `1px solid ${color}40` }}
                         >
-                          {symbol.slice(0, 1)}
+                          <img 
+                            src={`https://assets.coincap.io/assets/icons/${symbol.toLowerCase()}@2x.png`}
+                            alt={symbol}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.onerror = null;
+                              target.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><text x="50%" y="50%" font-size="12" font-family="sans-serif" font-weight="900" fill="${encodeURIComponent(color)}" dominant-baseline="central" text-anchor="middle">${symbol.slice(0, 1)}</text></svg>`;
+                            }}
+                          />
                         </div>
                         <div>
                           <div className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>

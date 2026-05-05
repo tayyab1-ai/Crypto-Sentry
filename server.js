@@ -41,8 +41,8 @@ const COINS = [
   'filecoin', 'vechain', 'theta-token', 'monero'
 ]
 
-const CRASH_THRESHOLD = -2.0  // -2% ya zyada drop
-const SPIKE_THRESHOLD = 2.0   // +2% ya zyada spike
+const CRASH_THRESHOLD = -0.5  // -2% ya zyada drop
+const SPIKE_THRESHOLD = 0.5   // +2% ya zyada spike
 const ALERT_COOLDOWN = 60000  // 60 seconds cooldown
 
 // ─────────────────────────────────────────

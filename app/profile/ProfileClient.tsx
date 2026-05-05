@@ -5,16 +5,6 @@ import { signOut } from 'next-auth/react'
 import Navbar from '@/components/Navbar'
 import Sidebar from '@/components/Sidebar'
 
-interface AlertItem {
-  id: string
-  asset_id: string
-  asset_name: string
-  price_at_drop: number
-  drop_percentage: number
-  alert_type: string
-  detected_at: string
-}
-
 interface Props {
   user: {
     name: string
@@ -24,8 +14,6 @@ interface Props {
     createdAt: string | null
   }
   watchlistCount: number
-  totalAlerts: number
-  recentAlerts: AlertItem[]
 }
 
 function timeAgo(dateStr: string): string {
@@ -71,12 +59,9 @@ function SectionLabel({ children, danger }: { children: React.ReactNode; danger?
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function ProfileClient({
   user,
   watchlistCount,
-  totalAlerts,
-  recentAlerts,
 }: Props) {
   const router = useRouter()
 
@@ -348,10 +333,9 @@ export default function ProfileClient({
             </Card>
 
             {/* ── Stats ───────────────────────────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-2 gap-3 mt-3">
               {[
                 { value: watchlistCount, label: 'ASSETS TRACKED', color: 'var(--green-bright)' },
-                { value: totalAlerts, label: 'ALERTS LOGGED', color: 'var(--red-alert)' },
                 { value: 'V4', label: 'SENTRY BUILD', color: '#f59e0b' },
               ].map(({ value, label, color }) => (
                 <div
@@ -373,88 +357,6 @@ export default function ProfileClient({
               ))}
             </div>
 
-            {/* ── Recent Alert Activity ────────────────────────────────────── */}
-            <div className="mt-3">
-              <Card>
-                <SectionLabel>RECENT ALERT ACTIVITY</SectionLabel>
-
-                {recentAlerts.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="text-[9px] tracking-widest"
-                      style={{ color: 'var(--text-muted)' }}>
-                      NO RECENT ALERTS FOR YOUR WATCHLIST
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-0">
-                    {recentAlerts.map((alert, i) => {
-                      const isCrash = alert.alert_type === 'CRASH'
-                      const isPos = alert.drop_percentage >= 0
-                      return (
-                        <div
-                          key={alert.id}
-                          className="flex items-center justify-between py-2.5"
-                          style={{
-                            borderBottom:
-                              i < recentAlerts.length - 1
-                                ? '1px solid var(--border-default)'
-                                : 'none',
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-1.5 h-1.5 rounded-full shrink-0"
-                              style={{
-                                background: isCrash
-                                  ? 'var(--red-alert)'
-                                  : 'var(--green-bright)',
-                              }}
-                            />
-                            <span className="text-xs font-bold"
-                              style={{ color: 'var(--text-primary)' }}>
-                              {alert.asset_name}
-                            </span>
-                            <span
-                              className="text-[8px] tracking-widest px-1.5 py-0.5 rounded"
-                              style={{
-                                background: isCrash
-                                  ? 'rgba(239,68,68,0.1)'
-                                  : 'rgba(34,197,94,0.1)',
-                                color: isCrash ? 'var(--red-alert)' : 'var(--green-bright)',
-                                border: `1px solid ${isCrash
-                                  ? 'rgba(239,68,68,0.3)'
-                                  : 'rgba(34,197,94,0.3)'}`,
-                              }}
-                            >
-                              {alert.alert_type}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-5">
-                            <span
-                              className="text-xs font-bold tabular-nums"
-                              style={{
-                                color: isPos
-                                  ? 'var(--green-bright)'
-                                  : 'var(--red-alert)',
-                              }}
-                            >
-                              {isPos ? '+' : ''}
-                              {alert.drop_percentage.toFixed(2)}%
-                            </span>
-                            <span
-                              className="text-[8px] tracking-widest min-w-14 text-right"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
-                              {timeAgo(alert.detected_at).toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </Card>
-            </div>
 
             {/* ── Danger Zone ─────────────────────────────────────────────── */}
             <div className="mt-3">

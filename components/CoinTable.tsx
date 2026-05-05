@@ -7,6 +7,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Sparkline from './Sparkline'
 
 interface CoinData {
   usd: number
@@ -27,6 +28,8 @@ const COIN_SYMBOLS: Record<string, string> = {
   solana: 'SOL', cardano: 'ADA', xrp: 'XRP',
   dogecoin: 'DOGE', polygon: 'MATIC', 'avalanche-2': 'AVAX',
   chainlink: 'LINK', litecoin: 'LTC', stellar: 'XLM',
+  uniswap: 'UNI', cosmos: 'ATOM', algorand: 'ALGO', tron: 'TRX',
+  filecoin: 'FIL', vechain: 'VET', 'theta-token': 'THETA', monero: 'XMR',
 }
 
 const COIN_COLORS: Record<string, string> = {
@@ -34,54 +37,10 @@ const COIN_COLORS: Record<string, string> = {
   solana: '#9945FF', cardano: '#0033AD', xrp: '#346AA9',
   dogecoin: '#C2A633', polygon: '#8247E5', 'avalanche-2': '#E84142',
   chainlink: '#375BD2', litecoin: '#BFBBBB', stellar: '#7D00FF',
+  uniswap: '#FF007A', cosmos: '#2E3148', algorand: '#000000', tron: '#FF0013',
+  filecoin: '#0090FF', vechain: '#15BDFF', 'theta-token': '#2AB8E6', monero: '#FF6600',
 }
 
-// ─── Sparkline SVG chart ──────────────────────────────────────────────────────
-// values: number[] — server se aayi persistent history
-function Sparkline({ values, positive }: { values: number[]; positive: boolean }) {
-  if (!values || values.length < 2) {
-    // Sirf ek dashed line — koi fake data nahi
-    return (
-      <svg width="64" height="28" viewBox="0 0 64 28" fill="none">
-        <line
-          x1="4" y1="14" x2="60" y2="14"
-          stroke="#1e2b1e" strokeWidth="1.5" strokeDasharray="3 3"
-        />
-      </svg>
-    )
-  }
-
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-  const w = 64
-  const h = 28
-  const pad = 3
-
-  const points = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (w - pad * 2)
-    const y = h - pad - ((v - min) / range) * (h - pad * 2)
-    return [x, y] as [number, number]
-  })
-
-  const linePath = `M ${points.map(([x, y]) => `${x},${y}`).join(' L ')}`
-  const areaPath = `M ${pad},${h - pad} L ${points.map(([x, y]) => `${x},${y}`).join(' L ')} L ${w - pad},${h - pad} Z`
-
-  const color = positive ? '#22c55e' : '#ef4444'
-  const areaFill = positive ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'
-
-  const lastX = points[points.length - 1][0]
-  const lastY = points[points.length - 1][1]
-
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none">
-      <path d={areaPath} fill={areaFill} />
-      <path d={linePath} stroke={color} strokeWidth="1.5"
-        strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={lastX} cy={lastY} r="2" fill={color} />
-    </svg>
-  )
-}
 
 // ─── Single Coin Card ─────────────────────────────────────────────────────────
 function CoinCard({
@@ -130,15 +89,22 @@ function CoinCard({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
           <div
-            className="w-7 h-7 rounded-full flex items-center justify-center
-                        text-[9px] font-black"
+            className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
             style={{
               background: `${coinColor}20`,
-              color: coinColor,
               border: `1px solid ${coinColor}40`,
             }}
           >
-            {symbol.slice(0, 1)}
+            <img
+              src={`https://assets.coincap.io/assets/icons/${symbol.toLowerCase()}@2x.png`}
+              alt={symbol}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.onerror = null;
+                target.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><text x="50%" y="50%" font-size="12" font-family="sans-serif" font-weight="900" fill="${encodeURIComponent(coinColor)}" dominant-baseline="central" text-anchor="middle">${symbol.slice(0, 1)}</text></svg>`;
+              }}
+            />
           </div>
           <div>
             <div className="text-xs font-bold tracking-wide"
@@ -243,7 +209,7 @@ export default function CoinTable({
   const [history, setHistory] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [stale, setStale] = useState(false)
-  const [limit, setLimit] = useState(12)
+  const [limit, setLimit] = useState(5)
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
@@ -388,7 +354,7 @@ export default function CoinTable({
             style={{ color: 'var(--text-secondary)' }}>
             SHOW:
           </span>
-          {[12, 24, 50].map((n) => (
+          {[5, 10, 20].map((n) => (
             <button
               key={n}
               onClick={() => setLimit(n)}
@@ -472,15 +438,22 @@ function CoinDetailModal({
         <div className="flex justify-between items-start mb-5">
           <div className="flex items-center gap-3">
             <div
-              className="w-9 h-9 rounded-full flex items-center justify-center
-                          text-sm font-black"
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden"
               style={{
                 background: `${coinColor}20`,
-                color: coinColor,
                 border: `1px solid ${coinColor}40`,
               }}
             >
-              {symbol.slice(0, 1)}
+              <img
+                src={`https://assets.coincap.io/assets/icons/${symbol.toLowerCase()}@2x.png`}
+                alt={symbol}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36"><text x="50%" y="50%" font-size="16" font-family="sans-serif" font-weight="900" fill="${encodeURIComponent(coinColor)}" dominant-baseline="central" text-anchor="middle">${symbol.slice(0, 1)}</text></svg>`;
+                }}
+              />
             </div>
             <div>
               <div className="font-bold text-sm"
