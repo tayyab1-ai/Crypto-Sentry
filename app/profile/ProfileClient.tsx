@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import Navbar from '@/components/Navbar'
 import Sidebar from '@/components/Sidebar'
 
@@ -60,15 +60,21 @@ function SectionLabel({ children, danger }: { children: React.ReactNode; danger?
 }
 
 export default function ProfileClient({
-  user,
+  user: initialUser,
   watchlistCount,
 }: Props) {
   const router = useRouter()
+  const { update } = useSession()
+  const [user, setUser] = useState(initialUser)
 
   // Edit name state
   const [editing, setEditing] = useState(false)
   const [newName, setNewName] = useState(user.name)
   const [saving, setSaving] = useState(false)
+
+  // Image upload state
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
 
   // Toast message
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
@@ -107,13 +113,92 @@ export default function ProfileClient({
         showToast('err', data.error || 'Failed to update name.')
       } else {
         showToast('ok', 'Operative name updated.')
+        setUser(prev => ({ ...prev, name: trimmed }))
         setEditing(false)
+        await update({ name: trimmed })
         router.refresh()
       }
     } catch {
       showToast('err', 'Network error. Try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── Handle Image Upload ──────────────────────────────────────────────────
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      // 1. Get Signature from backend
+      const resSig = await fetch('/api/upload-signature', { method: 'POST' })
+      const sigData = await resSig.json()
+      if (!resSig.ok) throw new Error(sigData.error || 'Failed to get upload signature')
+
+      // 2. Upload to Cloudinary (Signed)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('api_key', sigData.apiKey)
+      formData.append('timestamp', sigData.timestamp.toString())
+      formData.append('signature', sigData.signature)
+      formData.append('folder', 'profile_images')
+      
+      const resCloud = await fetch(`https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      const dataCloud = await resCloud.json()
+      if (!resCloud.ok) throw new Error(dataCloud.error?.message || 'Cloudinary upload failed')
+
+      const imageUrl = dataCloud.secure_url
+
+      // 3. Update DB
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageUrl }),
+      })
+
+      if (res.ok) {
+        setUser(prev => ({ ...prev, image: imageUrl }))
+        showToast('ok', 'Profile image updated.')
+        await update({ image: imageUrl })
+        router.refresh()
+      } else {
+        showToast('err', 'Failed to save image to profile.')
+      }
+    } catch (err: any) {
+      showToast('err', err.message || 'Failed to upload image.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // ── Handle Remove Image ──────────────────────────────────────────────────
+  async function handleRemoveImage() {
+    setUploading(true)
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: null }),
+      })
+
+      if (res.ok) {
+        setUser(prev => ({ ...prev, image: null }))
+        showToast('ok', 'Profile image removed.')
+        await update({ image: null })
+        router.refresh()
+      } else {
+        showToast('err', 'Failed to remove image.')
+      }
+    } catch {
+      showToast('err', 'Network error.')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -188,23 +273,58 @@ export default function ProfileClient({
 
               <div className="flex items-start gap-5">
                 {/* Avatar */}
-                {user.image ? (
-                  <img src={user.image} alt="avatar"
-                    className="w-16 h-16 rounded-lg object-cover shrink-0"
-                    style={{ border: '1px solid var(--border-green-dim)' }} />
-                ) : (
-                  <div
-                    className="w-16 h-16 rounded-lg flex items-center justify-center
-                                text-2xl font-black shrink-0"
-                    style={{
-                      background: 'var(--green-glow)',
-                      border: '1px solid var(--border-green-dim)',
-                      color: 'var(--green-bright)',
-                    }}
-                  >
-                    {initial}
+                <div className="relative group shrink-0">
+                  {user.image ? (
+                    <img src={user.image} alt="avatar"
+                      className="w-16 h-16 rounded-lg object-cover"
+                      style={{ border: '1px solid var(--border-green-dim)' }} />
+                  ) : (
+                    <div
+                      className="w-16 h-16 rounded-lg flex items-center justify-center
+                                  text-2xl font-black"
+                      style={{
+                        background: 'var(--green-glow)',
+                        border: '1px solid var(--border-green-dim)',
+                        color: 'var(--green-bright)',
+                      }}
+                    >
+                      {initial}
+                    </div>
+                  )}
+
+                  {/* Upload Overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center 
+                                bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity 
+                                rounded-lg cursor-pointer gap-1"
+                       onClick={() => fileInputRef.current?.click()}>
+                    <span className="text-[8px] font-bold tracking-widest text-white">
+                      {uploading ? '...' : 'EDIT'}
+                    </span>
                   </div>
-                )}
+
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+                  
+                  {user.image && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveImage();
+                      }}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full 
+                                 flex items-center justify-center text-[10px] text-white
+                                 hover:bg-red-600 transition-colors shadow-lg"
+                      title="Remove Image"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
 
                 {/* Fields */}
                 <div className="flex-1 space-y-4">

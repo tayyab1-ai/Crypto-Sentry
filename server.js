@@ -2,6 +2,33 @@
 
 const express = require('express')
 const { PrismaClient } = require('@prisma/client')
+const fs = require('fs')
+const path = require('path')
+
+const logFile = path.join(__dirname, 'sentry.log')
+
+function log(level, message, isImportant = false) {
+  const now = new Date()
+  // Proper timestamp format: "5/5/2026, 5:44:16 PM GMT+5"
+  const timestamp = now.toLocaleString('en-US', { timeZoneName: 'short' })
+  const formattedMessage = `[${timestamp}] [${level}] ${message}`
+  
+  // Terminal me sab show karo
+  if (level === 'ERROR') {
+    console.error(formattedMessage)
+  } else if (level === 'WARN') {
+    console.warn(formattedMessage)
+  } else {
+    console.log(formattedMessage)
+  }
+
+  // Log file me bas main main (important) cheezy save
+  if (isImportant || level === 'ERROR' || level === 'WARN' || level === 'SUCCESS' || level === 'ALERT') {
+    fs.appendFile(logFile, formattedMessage + '\n', (err) => {
+      if (err) console.error('Log file write failed:', err)
+    })
+  }
+}
 
 const app = express()
 const prisma = new PrismaClient()
@@ -41,8 +68,8 @@ const COINS = [
   'filecoin', 'vechain', 'theta-token', 'monero'
 ]
 
-const CRASH_THRESHOLD = -0.5  // -2% ya zyada drop
-const SPIKE_THRESHOLD = 0.5   // +2% ya zyada spike
+const CRASH_THRESHOLD = -2.0  // -2% ya zyada drop
+const SPIKE_THRESHOLD = 2.0   // +2% ya zyada spike
 const ALERT_COOLDOWN = 60000  // 60 seconds cooldown
 
 // ─────────────────────────────────────────
@@ -50,13 +77,13 @@ const ALERT_COOLDOWN = 60000  // 60 seconds cooldown
 // ─────────────────────────────────────────
 async function fetchPricesFromCoinGecko() {
   const coinIds = COINS.join(',')
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true`
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
 
   const response = await fetch(url)
   
   if (response.status === 429) {
     // Rate limit — wait karo
-    console.log(`[${new Date().toISOString()}] Rate limited by CoinGecko`)
+    log('WARN', 'Rate limited by CoinGecko', true)
     return null
   }
 
@@ -80,7 +107,7 @@ async function fetchWithRetry(retries = 3) {
       const waitTime = Math.pow(2, i) * 1000
       await new Promise(resolve => setTimeout(resolve, waitTime))
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Attempt ${i + 1} failed:`, error.message)
+      log('ERROR', `Attempt ${i + 1} failed: ${error.message}`, true)
       if (i === retries - 1) throw error
       
       const waitTime = Math.pow(2, i) * 1000
@@ -132,12 +159,9 @@ async function detectAnomalies(currentPrices) {
           lastAlertTime[assetId] = now
           newAlerts.add(assetId)
 
-          console.log(
-            `[${new Date().toISOString()}] 🔴 CRASH | ${assetId.toUpperCase()} | ` +
-            `Price: $${currentPrice} | Drop: ${changePercent.toFixed(2)}%`
-          )
+          log('ALERT', `🔴 CRASH | ${assetId.toUpperCase()} | Price: $${currentPrice} | Drop: ${changePercent.toFixed(2)}%`, true)
         } catch (err) {
-          console.error(`Alert save karne mein masla:`, err.message)
+          log('ERROR', `Alert save karne mein masla: ${err.message}`, true)
         }
       }
     }
@@ -162,12 +186,9 @@ async function detectAnomalies(currentPrices) {
 
           lastAlertTime[key] = now
 
-          console.log(
-            `[${new Date().toISOString()}] 🟢 SPIKE | ${assetId.toUpperCase()} | ` +
-            `Price: $${currentPrice} | Rise: +${changePercent.toFixed(2)}%`
-          )
+          log('ALERT', `🟢 SPIKE | ${assetId.toUpperCase()} | Price: $${currentPrice} | Rise: +${changePercent.toFixed(2)}%`, true)
         } catch (err) {
-          console.error(`Spike alert save mein masla:`, err.message)
+          log('ERROR', `Spike alert save mein masla: ${err.message}`, true)
         }
       }
     }
@@ -204,14 +225,14 @@ function formatCoinName(assetId) {
 // MAIN POLLING CYCLE — Har 30 second
 // ─────────────────────────────────────────
 async function runSurveillanceCycle() {
-  console.log(`[${new Date().toISOString()}] 🔄 Surveillance cycle started...`)
+  log('INFO', '🔄 Surveillance cycle started...', false)
 
   try {
     // Step 1: Prices fetch karo
     const prices = await fetchWithRetry()
     
     if (!prices) {
-      console.log(`[${new Date().toISOString()}] ⚠️ Prices not found, skipping thr cycle`)
+      log('WARN', '⚠️ Prices not found, skipping thr cycle', true)
       return
     }
 
@@ -225,13 +246,10 @@ async function runSurveillanceCycle() {
       activeAlerts: alerts,
     }
 
-    console.log(
-      `[${new Date().toISOString()}] ✅ Cycle complete | ` +
-      `Coins: ${Object.keys(prices).length} | Alerts: ${alerts.size}`
-    )
+    log('SUCCESS', `✅ Cycle complete | Coins: ${Object.keys(prices).length} | Alerts: ${alerts.size}`, true)
 
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] ❌ Cycle error:`, error.message)
+    log('ERROR', `❌ Cycle error: ${error.message}`, true)
   }
 }
 
@@ -288,7 +306,7 @@ app.get('/cache', (req, res) => {
 const PORT = process.env.PORT || 4000
 
 app.listen(PORT, async () => {
-  console.log(`[${new Date().toISOString()}] 🚀 Surveillance Engine started at port ${PORT}`)
+  log('SUCCESS', `🚀 Surveillance Engine started at port ${PORT}`, true)
 
   // Turant pehla cycle chalao
   await runSurveillanceCycle()
@@ -301,13 +319,13 @@ app.listen(PORT, async () => {
 // GRACEFUL SHUTDOWN
 // ─────────────────────────────────────────
 process.on('SIGTERM', async () => {
-  console.log('Server Closing...')
+  log('INFO', 'Server Closing...', true)
   await prisma.$disconnect()
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
-  console.log('Server Closing...')
+  log('INFO', 'Server Closing...', true)
   await prisma.$disconnect()
   process.exit(0)
 })

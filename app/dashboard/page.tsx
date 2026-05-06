@@ -22,6 +22,7 @@ export default async function DashboardPage() {
     <DashboardClient 
       userName={session.user?.name || 'Operator'}
       initialWatchlist={initialWatchlist}
+      tutorialDone={user?.tutorial_guide || false}
     />
   )
 }

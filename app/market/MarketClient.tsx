@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 interface CoinData {
   usd: number
   usd_24h_change: number
+  usd_market_cap: number
   name: string
   status: 'stable' | 'alert'
 }
@@ -16,8 +17,8 @@ const COIN_SYMBOLS: Record<string, string> = {
   solana: 'SOL', cardano: 'ADA', xrp: 'XRP',
   dogecoin: 'DOGE', polygon: 'MATIC', 'avalanche-2': 'AVAX',
   chainlink: 'LINK', litecoin: 'LTC', stellar: 'XLM',
-  tether: 'USDT', usdcoin: 'USDC', tron: 'TRX',
-  'lido-dao': 'LDO', polkadot: 'DOT',
+  uniswap: 'UNI', cosmos: 'ATOM', algorand: 'ALGO', tron: 'TRX',
+  filecoin: 'FIL', vechain: 'VET', 'theta-token': 'THETA', monero: 'XMR',
 }
 
 const COIN_COLORS: Record<string, string> = {
@@ -25,15 +26,16 @@ const COIN_COLORS: Record<string, string> = {
   solana: '#9945FF', cardano: '#0033AD', xrp: '#346AA9',
   dogecoin: '#C2A633', polygon: '#8247E5', 'avalanche-2': '#E84142',
   chainlink: '#375BD2', litecoin: '#BFBBBB', stellar: '#7D00FF',
-  tether: '#26A17B', usdcoin: '#2775CA', tron: '#FF0013',
-  'lido-dao': '#00A3FF', polkadot: '#E6007A',
+  uniswap: '#FF007A', cosmos: '#2E3148', algorand: '#000000', tron: '#FF0013',
+  filecoin: '#0090FF', vechain: '#15BDFF', 'theta-token': '#2AB8E6', monero: '#FF6600',
 }
 
-const MARKET_CAPS: Record<string, string> = {
-  bitcoin: '$1,781.2B', ethereum: '$352.9B', binancecoin: '$138.6B',
-  solana: '$67.5B', cardano: '$14.2B', xrp: '$103.5B',
-  dogecoin: '$23.4B', tether: '$144.8B', usdcoin: '$73.3B',
-  tron: '$28.7B', 'lido-dao': '$9.4B', polkadot: '$15.1B',
+const formatMarketCap = (val?: number) => {
+  if (!val) return '—'
+  if (val >= 1e12) return `$${(val / 1e12).toFixed(2)}T`
+  if (val >= 1e9) return `$${(val / 1e9).toFixed(2)}B`
+  if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`
+  return `$${val.toLocaleString()}`
 }
 
 export default function MarketClient({ userName, initialWatchlist }: any) {
@@ -186,9 +188,9 @@ export default function MarketClient({ userName, initialWatchlist }: any) {
                   const change24h = data.usd_24h_change || 0
                   const isPositive = change24h >= 0
                   const isAlert = data.status === 'alert'
-                  const symbol = COIN_SYMBOLS[id] || id.toUpperCase()
+                  const symbol = COIN_SYMBOLS[id] || id.toUpperCase().slice(0, 4)
                   const color = COIN_COLORS[id] || '#22c55e'
-                  const marketCap = MARKET_CAPS[id] || '—'
+                  const marketCap = formatMarketCap(data.usd_market_cap)
 
                   return (
                     <motion.div

@@ -31,7 +31,7 @@ export const authOptions: NextAuthOptions = {
         if (!user || !user.password_hash) return null
         const isValid = await bcrypt.compare(credentials.password, user.password_hash)
         if (!isValid) return null
-        return { id: user.id, email: user.email, name: user.name }
+        return { id: user.id, email: user.email, name: user.name, image: user.image }
       },
     }),
     GoogleProvider({
@@ -48,12 +48,24 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.id = user.id
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        token.id = user.id
+        token.image = user.image
+        token.name = user.name
+      }
+      if (trigger === 'update' && session) {
+        if (session.image !== undefined) token.image = session.image
+        if (session.name) token.name = session.name
+      }
       return token
     },
     async session({ session, token }) {
-      if (session.user) session.user.id = token.id as string
+      if (session.user) {
+        session.user.id = token.id as string
+        session.user.image = token.image as string
+        session.user.name = token.name as string
+      }
       return session
     },
     async signIn({ user, account }) {

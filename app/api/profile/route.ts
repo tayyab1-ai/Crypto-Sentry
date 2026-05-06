@@ -14,30 +14,40 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json()
-    const name = (body?.name || '').trim()
+    const name = body?.name?.trim()
+    const image = body?.image
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
+    const dataToUpdate: any = {}
+    if (name) {
+      if (name.length < 3) {
+        return NextResponse.json(
+          { error: 'Name must be at least 3 characters.' },
+          { status: 400 }
+        )
+      }
+      if (name.length > 50) {
+        return NextResponse.json(
+          { error: 'Name must be under 50 characters.' },
+          { status: 400 }
+        )
+      }
+      dataToUpdate.name = name
     }
-    if (name.length < 3) {
-      return NextResponse.json(
-        { error: 'Name must be at least 3 characters.' },
-        { status: 400 }
-      )
+
+    if (image !== undefined) {
+      dataToUpdate.image = image // can be null to remove
     }
-    if (name.length > 50) {
-      return NextResponse.json(
-        { error: 'Name must be under 50 characters.' },
-        { status: 400 }
-      )
+
+    if (Object.keys(dataToUpdate).length === 0) {
+      return NextResponse.json({ error: 'Nothing to update.' }, { status: 400 })
     }
 
     const updated = await prisma.user.update({
       where: { email: session.user?.email! },
-      data: { name },
+      data: dataToUpdate,
     })
 
-    return NextResponse.json({ success: true, name: updated.name })
+    return NextResponse.json({ success: true, name: updated.name, image: updated.image })
   } catch (error) {
     console.error('PROFILE_PATCH_ERROR:', error)
     return NextResponse.json({ error: 'Failed to update name.' }, { status: 500 })

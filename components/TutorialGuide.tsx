@@ -63,25 +63,43 @@ const STEPS = [
   },
 ]
 
-export default function TutorialGuide({ userName }: { userName: string }) {
+export default function TutorialGuide({ userName, initialDone }: { userName: string, initialDone?: boolean }) {
   const [active, setActive] = useState(false)
   const [step, setStep] = useState(0)
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null)
 
   useEffect(() => {
-    const done = localStorage.getItem('tutorial_done')
-    if (!done) {
+    if (!initialDone) {
       setTimeout(() => setActive(true), 1000)
     }
-  }, [])
+  }, [initialDone])
+
+  const updateRect = () => {
+    const el = document.getElementById(STEPS[step].targetId)
+    if (el) {
+      setTargetRect(el.getBoundingClientRect())
+    }
+  }
 
   useEffect(() => {
     if (!active) return
+
     const el = document.getElementById(STEPS[step].targetId)
     if (el) {
-      const rect = el.getBoundingClientRect()
-      setTargetRect(rect)
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    // Since scroll is smooth, poll for position updates
+    const intervalId = setInterval(updateRect, 50)
+    setTimeout(() => clearInterval(intervalId), 1000)
+    
+    window.addEventListener('resize', updateRect)
+    window.addEventListener('scroll', updateRect)
+
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('resize', updateRect)
+      window.removeEventListener('scroll', updateRect)
     }
   }, [step, active])
 
@@ -93,15 +111,56 @@ export default function TutorialGuide({ userName }: { userName: string }) {
     }
   }
 
-  const finish = () => {
-    localStorage.setItem('tutorial_done', 'true')
+  const finish = async () => {
     setActive(false)
+    try {
+      await fetch('/api/tutorial', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: true })
+      })
+    } catch(e) {}
   }
 
   if (!active) return null
 
   const currentStep = STEPS[step]
   const progress = ((step + 1) / STEPS.length) * 100
+
+  const getTooltipPosition = () => {
+    if (!targetRect) return { top: '50%', left: '50%', x: '-50%', y: '-50%' }
+    
+    let left = targetRect.right + 24
+    let top = targetRect.top
+    let x = '0%'
+    let y = '0%'
+    
+    // If it overflows right, put it on the left
+    if (left + 300 > window.innerWidth) {
+      left = targetRect.left - 24
+      x = '-100%'
+      // If it also overflows left, put it below
+      if (left - 300 < 0) {
+        left = targetRect.left + (targetRect.width / 2)
+        x = '-50%'
+        top = targetRect.bottom + 24
+      }
+    }
+
+    // Ensure it doesn't overflow bottom
+    if (top + 250 > window.innerHeight) {
+      top = window.innerHeight - 250 - 24
+    }
+    
+    // Ensure it doesn't overflow top
+    if (top < 24) {
+      top = 24
+    }
+
+    return { top, left, x, y }
+  }
+
+  const tooltipPos = getTooltipPosition()
 
   return (
     <AnimatePresence>
@@ -113,8 +172,8 @@ export default function TutorialGuide({ userName }: { userName: string }) {
       >
         {/* Dark overlay */}
         <div
-          className="absolute inset-0 pointer-events-auto"
-          style={{ background: 'rgba(0,0,0,0.82)' }}
+          className="absolute inset-0 pointer-events-auto transition-all duration-500"
+          style={{ background: 'rgba(0,0,0,0.6)' }}
         />
 
         {/* Green glowing border around highlighted element */}
@@ -130,7 +189,7 @@ export default function TutorialGuide({ userName }: { userName: string }) {
             className="absolute rounded-xl z-10"
             style={{
               border: '1.5px solid #22c55e',
-              boxShadow: '0 0 0 9999px rgba(0,0,0,0.82), 0 0 24px rgba(34,197,94,0.5), inset 0 0 12px rgba(34,197,94,0.08)',
+              boxShadow: '0 0 0 9999px rgba(0,0,0,0.6), 0 0 24px rgba(34,197,94,0.5), inset 0 0 12px rgba(34,197,94,0.08)',
             }}
           />
         )}
@@ -138,18 +197,17 @@ export default function TutorialGuide({ userName }: { userName: string }) {
         {/* Tooltip card — positioned to the right of the highlighted element */}
         <motion.div
           key={step}
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ 
+            opacity: 1, 
+            scale: 1,
+            top: tooltipPos.top,
+            left: tooltipPos.left,
+            x: tooltipPos.x,
+            y: tooltipPos.y
+          }}
           transition={{ duration: 0.2 }}
           className="absolute z-20 pointer-events-auto"
-          style={{
-            top: targetRect
-              ? Math.min(targetRect.top, window.innerHeight - 240)
-              : '50%',
-            left: targetRect
-              ? Math.min(targetRect.right + 16, window.innerWidth - 300)
-              : '50%',
-          }}
         >
           <div
             className="w-72 rounded-xl p-5 shadow-2xl"

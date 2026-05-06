@@ -146,16 +146,25 @@ export default function Sidebar() {
             border: '1px solid var(--border-default)'
           }}
         >
-          <div 
-            className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold shrink-0"
-            style={{ 
-              background: 'var(--green-glow)',
-              border: '1px solid var(--border-green-dim)',
-              color: 'var(--green-bright)'
-            }}
-          >
-            {userInitial}
-          </div>
+          {session?.user?.image ? (
+            <img 
+              src={session.user.image} 
+              alt="User" 
+              className="w-6 h-6 rounded object-cover shrink-0"
+              style={{ border: '1px solid var(--border-green-dim)' }}
+            />
+          ) : (
+            <div 
+              className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold shrink-0"
+              style={{ 
+                background: 'var(--green-glow)',
+                border: '1px solid var(--border-green-dim)',
+                color: 'var(--green-bright)'
+              }}
+            >
+              {userInitial}
+            </div>
+          )}
           <div className="flex-1 text-left overflow-hidden">
             <div className="text-[10px] font-bold truncate" style={{ color: 'var(--text-primary)' }}>
               {userName.toUpperCase()}

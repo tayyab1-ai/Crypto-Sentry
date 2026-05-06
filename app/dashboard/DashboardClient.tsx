@@ -10,6 +10,7 @@ import Sparkline from '@/components/Sparkline'
 interface Props {
   userName: string
   initialWatchlist: string[]
+  tutorialDone: boolean
 }
 
 interface MarketOverview {
@@ -54,7 +55,7 @@ function MiniBarChart({ change }: { change: number }) {
 
 
 
-export default function DashboardClient({ userName, initialWatchlist }: Props) {
+export default function DashboardClient({ userName, initialWatchlist, tutorialDone }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'watchlist' | 'gainers' | 'losers'>('all')
   const [watchlist, setWatchlist] = useState<string[]>(initialWatchlist)
@@ -151,7 +152,7 @@ export default function DashboardClient({ userName, initialWatchlist }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
-      <TutorialGuide userName={userName} />
+      <TutorialGuide userName={userName} initialDone={tutorialDone} />
       <Navbar searchValue={searchQuery} onSearchChange={setSearchQuery} />
 
       <div className="flex flex-1">

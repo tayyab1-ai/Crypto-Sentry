@@ -201,7 +201,6 @@ export default function SettingsClient({ user }: Props) {
   function handleClearPrefs() {
     localStorage.removeItem('bitbash_notif_prefs')
     localStorage.removeItem('bitbash_ui_prefs')
-    localStorage.removeItem('tutorial_done')
     setNotifs({ crashAlerts: true, priceSpikes: true, weeklyDigest: false })
     setPrefs({ compactMode: false, animationsEnabled: true, autoRefresh: true })
     showToast('ok', 'All preferences cleared. Refreshing...')
@@ -549,9 +548,18 @@ export default function SettingsClient({ user }: Props) {
                   sublabel="Show the onboarding guide again on next visit"
                 >
                   <button
-                    onClick={() => {
-                      localStorage.removeItem('tutorial_done')
-                      showToast('ok', 'Tutorial will show on next page load.')
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/tutorial', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ done: false })
+                        })
+                        showToast('ok', 'Tutorial reset. Redirecting to dashboard...')
+                        setTimeout(() => window.location.href = '/dashboard', 1200)
+                      } catch (e) {
+                        showToast('err', 'Failed to reset tutorial.')
+                      }
                     }}
                     className="px-3 py-1.5 rounded text-[9px] font-bold tracking-widest
                                transition-all"
