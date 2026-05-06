@@ -35,10 +35,16 @@ const prisma = new PrismaClient()
 
 app.use(express.json())
 
-// CORS — Next.js ko allow karo
+// CORS — Allow frontend
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000')
-  res.header('Access-Control-Allow-Headers', 'Content-Type')
+  const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000'
+  res.header('Access-Control-Allow-Origin', allowedOrigin)
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200)
+  }
   next()
 })
 
@@ -305,8 +311,8 @@ app.get('/cache', (req, res) => {
 // ─────────────────────────────────────────
 const PORT = process.env.PORT || 4000
 
-app.listen(PORT, async () => {
-  log('SUCCESS', `🚀 Surveillance Engine started at port ${PORT}`, true)
+app.listen(PORT, "0.0.0.0", async () => {
+  log('SUCCESS', `🚀 Surveillance Engine started at port ${PORT} (0.0.0.0)`, true)
 
   // Turant pehla cycle chalao
   await runSurveillanceCycle()
