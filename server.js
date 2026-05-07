@@ -12,7 +12,7 @@ function log(level, message, isImportant = false) {
   // Proper timestamp format: "5/5/2026, 5:44:16 PM GMT+5"
   const timestamp = now.toLocaleString('en-US', { timeZoneName: 'short' })
   const formattedMessage = `[${timestamp}] [${level}] ${message}`
-  
+
   // Terminal me sab show karo
   if (level === 'ERROR') {
     console.error(formattedMessage)
@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', allowedOrigin)
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
-  
+
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200)
   }
@@ -86,7 +86,7 @@ async function fetchPricesFromCoinGecko() {
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
 
   const response = await fetch(url)
-  
+
   if (response.status === 429) {
     // Rate limit — wait karo
     log('WARN', 'Rate limited by CoinGecko', true)
@@ -108,14 +108,14 @@ async function fetchWithRetry(retries = 3) {
     try {
       const data = await fetchPricesFromCoinGecko()
       if (data) return data
-      
+
       // Rate limited — wait karo
       const waitTime = Math.pow(2, i) * 1000
       await new Promise(resolve => setTimeout(resolve, waitTime))
     } catch (error) {
       log('ERROR', `Attempt ${i + 1} failed: ${error.message}`, true)
       if (i === retries - 1) throw error
-      
+
       const waitTime = Math.pow(2, i) * 1000
       await new Promise(resolve => setTimeout(resolve, waitTime))
     }
@@ -236,7 +236,7 @@ async function runSurveillanceCycle() {
   try {
     // Step 1: Prices fetch karo
     const prices = await fetchWithRetry()
-    
+
     if (!prices) {
       log('WARN', '⚠️ Prices not found, skipping thr cycle', true)
       return
@@ -262,6 +262,11 @@ async function runSurveillanceCycle() {
 // ─────────────────────────────────────────
 // API ENDPOINTS
 // ─────────────────────────────────────────
+
+// Root route for cron jobs / pings
+app.get('/', (req, res) => {
+  res.status(200).send('Surveillance Engine is active.')
+})
 
 // Health check
 app.get('/health', (req, res) => {
