@@ -12,7 +12,7 @@ export const authOptions: NextAuthOptions = {
         httpOnly: true,
         sameSite: 'none',
         path: '/',
-        secure: false,
+        secure: true,
       },
     },
   },
