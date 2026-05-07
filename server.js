@@ -285,7 +285,7 @@ app.get('/cache', (req, res) => {
   }
 
   const cacheAge = Date.now() - memoryCache.timestamp
-  const isStale = cacheAge > 60000 // 1 minute se zyada purana
+  const isStale = cacheAge > 180000 // 3 minutes se zyada purana (resilience for cloud IPs)
 
   // Prices mein status add karo
   const enrichedPrices = {}
@@ -317,8 +317,8 @@ app.listen(PORT, "0.0.0.0", async () => {
   // Turant pehla cycle chalao
   await runSurveillanceCycle()
 
-  // Har 30 second mein chalao
-  setInterval(runSurveillanceCycle, 30000)
+  // Har 60 second mein chalao (to avoid rate limits on Render/Shared IPs)
+  setInterval(runSurveillanceCycle, 60000)
 })
 
 // ─────────────────────────────────────────
